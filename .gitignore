@@ -1,0 +1,12 @@
+# Local Python environments and bytecode
+.venv/
+__pycache__/
+*.py[cod]
+
+# Local datasets, trained weights, and generated submission archives
+data/
+results/
+assignment2.zip
+
+# macOS metadata
+.DS_Store

@@ -73,17 +73,22 @@ class ParserModel(nn.Module):
         ### 
         ### See the PDF for hints.
 
-
-
-
         # W maps concatenated embeddings to hidden units; U maps hidden units
         # to transition scores. Parameters are registered for Adam to update.
+        # 36 features × 50 numbers per feature = 1,800 input numbers
+        # Create a table of initial weights - W: weights shaped (1800, 200)
         self.embed_to_hidden_weight = nn.Parameter(torch.empty(n_features * self.embed_size, hidden_size))
+        # Creates 200 initialized biases - b1
         self.embed_to_hidden_bias = nn.Parameter(torch.empty(hidden_size))
         nn.init.xavier_uniform_(self.embed_to_hidden_weight)
         nn.init.uniform_(self.embed_to_hidden_bias)
+
+        # Create dropout layer => Dropout temporarily hides some of the hidden layer’s calculated values during training. 
+        # This helps the model avoid relying too heavily on particular values.
         self.dropout = nn.Dropout(dropout_prob)
+        # second learned weight table - U: weights shaped (200, 3)
         self.hidden_to_logits_weight = nn.Parameter(torch.empty(hidden_size, n_classes))
+        # Creates 200 initialized biases - b2
         self.hidden_to_logits_bias = nn.Parameter(torch.empty(n_classes))
         nn.init.xavier_uniform_(self.hidden_to_logits_weight)
         nn.init.uniform_(self.hidden_to_logits_bias)
@@ -117,10 +122,16 @@ class ParserModel(nn.Module):
         ###     Gather: https://pytorch.org/docs/stable/torch.html#torch.gather
         ###     View: https://pytorch.org/docs/stable/tensors.html#torch.Tensor.view
         ###     Flatten: https://pytorch.org/docs/stable/generated/torch.flatten.html
-        # Index all features at once: (batch, features, embedding dimensions).
-        # Flatten each sentence's features while preserving their order.
-        x = self.embeddings[w].view(w.shape[0], self.n_features * self.embed_size)
 
+        # Look up a vector for each feature ID.
+        selected_embeddings = self.embeddings[w]
+
+        # Calculate the dimensions of the flattened result.
+        batch_size = w.shape[0]
+        input_size = self.n_features * self.embed_size
+
+        # Join each parsing state's feature vectors into one long vector.
+        x = selected_embeddings.view(batch_size, input_size)
 
         ### END YOUR CODE
         return x
@@ -160,7 +171,7 @@ class ParserModel(nn.Module):
         h = F.relu(x @ self.embed_to_hidden_weight + self.embed_to_hidden_bias)
         # Dropout automatically turns off when the model is in eval mode.
         h = self.dropout(h)
-        # Return raw scores: CrossEntropyLoss includes log-softmax itself.
+        # Return 3 raw scores: CrossEntropyLoss includes log-softmax itself.
         logits = h @ self.hidden_to_logits_weight + self.hidden_to_logits_bias
 
         ### END YOUR CODE

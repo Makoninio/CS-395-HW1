@@ -34,8 +34,10 @@ class PartialParse(object):
         ###       reference the sentence object.  That is, remember to NOT modify the sentence object. 
 
 
-        # Copy the buffer so shifting words never changes the caller's sentence.
+        # A new parse starts with only ROOT on the stack and no known arcs.
         self.stack = ["ROOT"]
+        # Copy the list because SHIFT removes words from the working buffer; the
+        # original sentence must stay unchanged for bookkeeping and evaluation.
         self.buffer = sentence[:]
         self.dependencies = []
         ### END YOUR CODE
@@ -121,17 +123,28 @@ def minibatch_parse(sentences, model, batch_size):
 
     if batch_size <= 0:
         raise ValueError("batch_size must be positive")
+
+    # Give every sentence its own independent stack, buffer, and dependency list.
     partial_parses = [PartialParse(sentence) for sentence in sentences]
-    # Keep the original list in input order while tracking unfinished objects.
+
+    # This is a shallow list copy: both lists point to the same PartialParse
+    # objects. The original list preserves input order; this list can shrink as
+    # parses finish.
     unfinished_parses = partial_parses[:]
+    # A parse is complete only when its buffer is empty and its stack is [ROOT].
     unfinished_parses = [p for p in unfinished_parses if p.buffer or len(p.stack) > 1]
+
     while unfinished_parses:
+        # Predict one (possibly different) next action for each active parse.
         minibatch = unfinished_parses[:batch_size]
         transitions = model.predict(minibatch)
         for partial_parse, transition in zip(minibatch, transitions):
             partial_parse.parse_step(transition)
+
         # Finished parses remain in partial_parses for the ordered result.
         unfinished_parses = [p for p in unfinished_parses if p.buffer or len(p.stack) > 1]
+
+    # Result i still belongs to input sentence i.
     dependencies = [p.dependencies for p in partial_parses]
     ### END YOUR CODE
 

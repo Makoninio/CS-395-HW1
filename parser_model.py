@@ -46,6 +46,8 @@ class ParserModel(nn.Module):
         self.dropout_prob = dropout_prob
         self.embed_size = embeddings.shape[1]
         self.hidden_size = hidden_size
+        # Register the pretrained embedding table as trainable so Adam can
+        # fine-tune the word/POS representations for dependency parsing.
         self.embeddings = nn.Parameter(torch.tensor(embeddings))
 
         ### YOUR CODE HERE (~9-10 Lines)
@@ -73,20 +75,19 @@ class ParserModel(nn.Module):
         ### 
         ### See the PDF for hints.
 
-        # W maps concatenated embeddings to hidden units; U maps hidden units
-        # to transition scores. Parameters are registered for Adam to update.
-        # 36 features × 50 numbers per feature = 1,800 input numbers
-        # Create a table of initial weights - W: weights shaped (1800, 200)
+        # W maps the concatenated feature embeddings to the hidden layer.
+        # With the defaults: 36 features * 50 values = 1,800 inputs, so
+        # W has shape (1800, 200).
         self.embed_to_hidden_weight = nn.Parameter(torch.empty(n_features * self.embed_size, hidden_size))
-        # Creates 200 initialized biases - b1
+        # b1 has one bias value for each of the 200 hidden units.
         self.embed_to_hidden_bias = nn.Parameter(torch.empty(hidden_size))
         nn.init.xavier_uniform_(self.embed_to_hidden_weight)
         nn.init.uniform_(self.embed_to_hidden_bias)
 
-        # Create dropout layer => Dropout temporarily hides some of the hidden layer’s calculated values during training. 
-        # This helps the model avoid relying too heavily on particular values.
+        # During training, dropout randomly hides some hidden values so the
+        # model does not rely too heavily on any one unit.
         self.dropout = nn.Dropout(dropout_prob)
-        # second learned weight table - U: weights shaped (200, 3)
+        # U maps 200 hidden values to 3 scores: LEFT-ARC, RIGHT-ARC, and SHIFT.
         self.hidden_to_logits_weight = nn.Parameter(torch.empty(hidden_size, n_classes))
         # b2 has 3 values (one per transition class), while b1 has 200 values (one per hidden unit).
         self.hidden_to_logits_bias = nn.Parameter(torch.empty(n_classes))
@@ -123,14 +124,16 @@ class ParserModel(nn.Module):
         ###     View: https://pytorch.org/docs/stable/tensors.html#torch.Tensor.view
         ###     Flatten: https://pytorch.org/docs/stable/generated/torch.flatten.html
 
-        # Look up a vector for each feature ID.
+        # w has shape (batch, 36). Indexing the table replaces every ID with
+        # its 50-value embedding, giving (batch, 36, 50).
         selected_embeddings = self.embeddings[w]
 
         # Calculate the dimensions of the flattened result.
         batch_size = w.shape[0]
         input_size = self.n_features * self.embed_size
 
-        # Join each parsing state's feature vectors into one long vector.
+        # Join each state's 36 vectors into one 1,800-value input. No values
+        # are discarded; view only changes how the same data is arranged.
         x = selected_embeddings.view(batch_size, input_size)
 
         ### END YOUR CODE
@@ -167,11 +170,16 @@ class ParserModel(nn.Module):
         ### Please see the following docs for support:
         ###     Matrix product: https://pytorch.org/docs/stable/torch.html#torch.matmul
         ###     ReLU: https://pytorch.org/docs/stable/nn.html?highlight=relu#torch.nn.functional.relu
+        # (batch, 36 IDs) -> (batch, 1800 embedded feature values)
         x = self.embedding_lookup(w)
+        # First affine layer followed by ReLU: (batch, 1800) -> (batch, 200).
+        # ReLU replaces negative activations with zero, letting the network
+        # learn nonlinear patterns instead of behaving like one linear layer.
         h = F.relu(x @ self.embed_to_hidden_weight + self.embed_to_hidden_bias)
         # Dropout automatically turns off when the model is in eval mode.
         h = self.dropout(h)
-        # Return 3 raw scores: CrossEntropyLoss includes log-softmax itself.
+        # Output one raw score (logit) for each transition: (batch, 200) ->
+        # (batch, 3). CrossEntropyLoss applies the needed log-softmax itself.
         logits = h @ self.hidden_to_logits_weight + self.hidden_to_logits_bias
 
         ### END YOUR CODE

@@ -53,14 +53,17 @@ def train(parser, train_data, dev_data, output_path, batch_size=1024, n_epochs=1
 
 
 
-    # Optimize every trainable parameter, including the pretrained embeddings.
+    # Optimize every trainable parameter, including the fine-tuned embeddings.
     optimizer = optim.Adam(parser.model.parameters(), lr=lr)
+    # Cross entropy rewards a high score for the oracle's correct transition.
+    # "mean" reports the average loss across examples in the minibatch.
     loss_func = nn.CrossEntropyLoss(reduction="mean")
     ### END YOUR CODE
 
     for epoch in range(n_epochs):
         print("Epoch {:} out of {:}".format(epoch + 1, n_epochs))
         dev_UAS = train_for_epoch(parser, train_data, dev_data, optimizer, loss_func, batch_size)
+        # Keep the checkpoint that generalizes best, not simply the last epoch.
         if dev_UAS > best_dev_UAS:
             best_dev_UAS = dev_UAS
             print("New best dev UAS! Saving model.")
@@ -84,15 +87,21 @@ def train_for_epoch(parser, train_data, dev_data, optimizer, loss_func, batch_si
 
     @return dev_UAS (float): Unlabeled Attachment Score (UAS) for dev data
     """
-    parser.model.train() # Places model in "train" mode, i.e. apply dropout layer
+    # Training mode enables dropout. It does not itself perform training.
+    parser.model.train()
     n_minibatches = math.ceil(len(train_data) / batch_size)
     loss_meter = AverageMeter()
 
     with tqdm(total=(n_minibatches)) as prog:
         for i, (train_x, train_y) in enumerate(minibatches(train_data, batch_size)):
-            optimizer.zero_grad()   # remove any baggage in the optimizer
+            # PyTorch accumulates gradients by default, so clear the previous
+            # minibatch's gradients before computing new ones.
+            optimizer.zero_grad()
             loss = 0. # store loss for this batch here
+            # Features are token IDs, so they must be integer (long) tensors.
             train_x = torch.from_numpy(train_x).long()
+            # The utility returns one-hot labels; CrossEntropyLoss expects a
+            # single class ID (0=LA, 1=RA, 2=SHIFT) for each example.
             train_y = torch.from_numpy(train_y.nonzero()[1]).long()
 
             ### YOUR CODE HERE (~4-10 lines)
@@ -107,12 +116,13 @@ def train_for_epoch(parser, train_data, dev_data, optimizer, loss_func, batch_si
             ### Please see the following docs for support:
             ###     Optimizer Step: https://pytorch.org/docs/stable/optim.html#optimizer-step
 
-            #Calculate predictions
+            # Forward pass: predict three transition logits for every example.
             logits = parser.model(train_x)
+            # Compare those logits with the oracle's correct transition IDs.
             loss = loss_func(logits, train_y)
-            # Compute gradients, then update the weights once per minibatch.
+            # Backward pass: compute how every parameter affected the loss.
             loss.backward()
-            ## Update paramters
+            # Adam uses those gradients to update the model once per minibatch.
             optimizer.step()
             ### END YOUR CODE
             prog.update(1)
@@ -121,7 +131,8 @@ def train_for_epoch(parser, train_data, dev_data, optimizer, loss_func, batch_si
     print ("Average Train Loss: {}".format(loss_meter.avg))
 
     print("Evaluating on dev set",)
-    parser.model.eval() # Places model in "eval" mode, i.e. don't apply dropout layer
+    # Evaluation mode disables dropout for stable development predictions.
+    parser.model.eval()
     dev_UAS, _ = parser.parse(dev_data)
     print("- dev UAS: {:.2f}".format(dev_UAS * 100.0))
     return dev_UAS
@@ -135,10 +146,12 @@ if __name__ == "__main__":
     print(80 * "=")
     print("INITIALIZING")
     print(80 * "=")
+    # Debug mode loads reduced datasets; a normal run uses all available data.
     parser, embeddings, train_data, dev_data, test_data = load_and_preprocess_data(debug)
 
     start = time.time()
     model = ParserModel(embeddings)
+    # Parser handles features/transitions; ParserModel supplies neural scores.
     parser.model = model
     print("took {:.2f} seconds\n".format(time.time() - start))
 
@@ -158,6 +171,7 @@ if __name__ == "__main__":
         print("TESTING")
         print(80 * "=")
         print("Restoring the best model weights found on the dev set")
+        # Test the best development checkpoint rather than the final epoch.
         parser.model.load_state_dict(torch.load(output_path))
         print("Final evaluation on test set",)
         parser.model.eval()

@@ -88,7 +88,7 @@ class ParserModel(nn.Module):
         self.dropout = nn.Dropout(dropout_prob)
         # second learned weight table - U: weights shaped (200, 3)
         self.hidden_to_logits_weight = nn.Parameter(torch.empty(hidden_size, n_classes))
-        # Creates 200 initialized biases - b2
+        # b2 has 3 values (one per transition class), while b1 has 200 values (one per hidden unit).
         self.hidden_to_logits_bias = nn.Parameter(torch.empty(n_classes))
         nn.init.xavier_uniform_(self.hidden_to_logits_weight)
         nn.init.uniform_(self.hidden_to_logits_bias)

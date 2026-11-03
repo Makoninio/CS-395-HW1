@@ -3,8 +3,6 @@
 """
 CS224N 2023-2024: Homework 2
 run.py: Run the dependency parser.
-Sahil Chopra <schopra8@stanford.edu>
-Haoshen Hong <haoshen@stanford.edu>
 """
 from datetime import datetime
 import os

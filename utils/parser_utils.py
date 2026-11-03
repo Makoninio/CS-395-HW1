@@ -3,7 +3,6 @@
 """
 CS224N 2021-2022: Homework 3
 parser_utils.py: Utilities for training the dependency parser.
-Sahil Chopra <schopra8@stanford.edu>
 """
 
 import time

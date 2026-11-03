@@ -39,8 +39,6 @@ def train(parser, train_data, dev_data, output_path, batch_size=1024, n_epochs=1
     @param lr (float): Learning rate
     """
     best_dev_UAS = 0
-
-
     ### YOUR CODE HERE (~2-7 lines)
     ### TODO:
     ###      1) Construct Adam Optimizer in variable `optimizer`
@@ -109,13 +107,12 @@ def train_for_epoch(parser, train_data, dev_data, optimizer, loss_func, batch_si
             ### Please see the following docs for support:
             ###     Optimizer Step: https://pytorch.org/docs/stable/optim.html#optimizer-step
 
-
-
-
+            #Calculate predictions
             logits = parser.model(train_x)
             loss = loss_func(logits, train_y)
             # Compute gradients, then update the weights once per minibatch.
             loss.backward()
+            ## Update paramters
             optimizer.step()
             ### END YOUR CODE
             prog.update(1)
